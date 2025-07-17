@@ -1,0 +1,19 @@
+{
+  "name": "givepatsfedibot",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@someaspy/pet-pet-gif": "^2.0.6",
+    "cron": "^4.3.2",
+    "masto": "^7.2.0",
+    "misskey-js": "^2025.7.0-beta.2",
+    "pet-pet-gif": "^1.0.9"
+  }
+}
