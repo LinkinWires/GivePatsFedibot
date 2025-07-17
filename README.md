@@ -1,6 +1,6 @@
 # Give Pats Fedibot
 
-Bot for Mastodon and Mastodon-compatible federated social media, which pats tagged users =3
+Bot for Mastodon(-compatible) and Misskey(-compatible) federated social media, which pats tagged users =3
 
 Inspired by
 
@@ -9,6 +9,6 @@ Inspired by
 
 ## (Planned) Features
 - [ ] Create and send GIF, where tagged user's profile picture gets patted
-- [ ] Create, add to an instance and send custom emoji, where tagged user's profile picture gets patted
-- [ ] Automatically create pat emojis for every user on the same instance where this bot is hosted
-- [ ] Automatically update pat emojis when user's profile picture updates
+- [ ] Create, add to an instance and send custom emoji, where tagged user's profile picture gets patted (Misskey-only)
+- [ ] Automatically create pat emojis for every user on the same instance where this bot is hosted (Misskey-only)
+- [ ] Automatically update pat emojis when user's profile picture updates (Misskey-only)
