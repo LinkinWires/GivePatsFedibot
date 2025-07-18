@@ -17,8 +17,8 @@ export async function pat(filename: string): Promise<Buffer> {
     const format = mime.replace('image/', '');
     let finalFilename = '';
     if (mime !== 'image/png') {
-        const newFilename = `${filename.replace('tmp', 'png')}`;
-        await $`ffmpeg -y -i ${filename} ${newFilename}`;
+        const newFilename = `${filename.replace(format, 'png')}`;
+        await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
         finalFilename = newFilename;
     } else finalFilename = filename;
     return await petPetGif(finalFilename);
