@@ -4,40 +4,40 @@ The reason I'm not streaming mentions but doing the whole fuckery I'm doing is t
 Might be related to this, error is exactly the same: https://github.com/oven-sh/bun/issues/17005 
 */
 
-import { api as misskeyApi, note } from 'misskey-js';
+import { api as misskeyApi } from 'misskey-js';
 import { FediDriver } from './schema';
 import type { DriveFile, NotesCreateResponse, Notification, User } from 'misskey-js/entities.js';
 import type { APIClient } from 'misskey-js/api.js';
 import { pat } from './shared';
 
 export class MisskeyDriver extends FediDriver {
-    private api: APIClient;
+    private _api: APIClient;
     public mode: 'gif' | 'emoji';
     public constructor(instanceUrl: string, accessToken: string, mode: 'gif' | 'emoji' = 'gif', debug = false, idFilename = '.last-id') {
         super(debug, idFilename);
         this.mode = mode;
-        this.api = new misskeyApi.APIClient({
+        this._api = new misskeyApi.APIClient({
             origin: instanceUrl,
             credential: accessToken,
         });
-        this.SaveLastMentionIdToFile();
+        this._saveLastMentionIdToFile();
     }
-    public ComposeFqn(user: User): string {
+    private _composeFqn(user: User): string {
         return `@${user.username}${user.host ? `@${user.host}` : ''}`;
     }
-    public async GetMe(): Promise<User> {
-        return await this.api.request('i', {});
+    private async _getMe(): Promise<User> {
+        return await this._api.request('i', {});
     }
-    public async GetUsers(ids: string[]): Promise<User[]> {
-        return await this.api.request('users/show', {userIds: ids});
+    private async _getUsers(ids: string[]): Promise<User[]> {
+        return await this._api.request('users/show', {userIds: ids});
     }
-    public async GetMentions(sinceId?: string, untilId?: string, markAsRead: boolean = true): Promise<Notification[]> {
-        return await this.api.request('i/notifications', {sinceId: sinceId, untilId: untilId, markAsRead: markAsRead, includeTypes: ['mention']});
+    protected async _getMentions(sinceId?: string, untilId?: string, markAsRead: boolean = true): Promise<Notification[]> {
+        return await this._api.request('i/notifications', {sinceId: sinceId, untilId: untilId, markAsRead: markAsRead, includeTypes: ['mention']});
     }
-    public async UploadMedia(file: Blob, alt?: string): Promise<DriveFile> {
-        return await this.api.request('drive/files/create', {file: file, comment: alt});
+    protected async _uploadMedia(file: Blob, alt?: string): Promise<DriveFile> {
+        return await this._api.request('drive/files/create', {file: file, comment: alt});
     }
-    public async Post(mediaId: string, text: string, mentions: string[], visibility: 'public' | 'home' | 'followers' | 'specified', replyId: string): Promise<NotesCreateResponse> {
+    protected async _post(mediaId: string, text: string, mentions: string[], visibility: 'public' | 'home' | 'followers' | 'specified', replyId: string): Promise<NotesCreateResponse> {
         const postRequest = {
             visibility: visibility,
             visibleUserIds: visibility === 'specified' ? mentions : undefined,
@@ -45,13 +45,13 @@ export class MisskeyDriver extends FediDriver {
             text: text,
             mediaIds: [mediaId],
         }
-        return await this.api.request('notes/create', postRequest);
+        return await this._api.request('notes/create', postRequest);
     }
-    public async SaveLastMentionIdToFile(id?: string): Promise<void> {
+    protected async _saveLastMentionIdToFile(id?: string): Promise<void> {
         if (id) {
             await Bun.write(this.idFilename, id);
         } else {
-            const lastMention = (await this.GetMentions())[0];
+            const lastMention = (await this._getMentions())[0];
             if (!lastMention) {
                 if (this.debug) throw Error('GetMentions() returned empty array.');
                 else {
@@ -63,14 +63,33 @@ export class MisskeyDriver extends FediDriver {
         }
     }
     public async Tick(): Promise<void> {
-        const self = await this.GetMe();
-        const lastId = await this.LoadLastMentionIdFromFile();
-        const unreadMentions = await this.GetMentions(lastId);
+        const self = await this._getMe();
+        const lastId = await this._loadLastMentionIdFromFile();
+        const unreadMentions = await this._getMentions(lastId);
+        if (unreadMentions.length > 0) {
+            console.log(`new mentions: ${unreadMentions.map(mention => mention.id)}`);
+        }
         unreadMentions.forEach(async mention => {
             if (mention.type !== 'mention') {
                 if (this.debug) throw Error('Notification type is not a mention');
                 else {
                     console.error('Notification type is not a mention');
+                    return;
+                }
+            }
+
+            if (mention.userId === self.id) {
+                if (this.debug) throw Error('Post was created by the bot itself');
+                else {
+                    console.error('Post was created by the bot itself');
+                    return;
+                }
+            }
+
+            if (mention.note.reply && mention.note.reply.userId === self.id) {
+                if (this.debug) throw Error("This post is a reply to the bot's post");
+                else {
+                    console.error("This post is a reply to the bot's post");
                     return;
                 }
             }
@@ -99,11 +118,11 @@ export class MisskeyDriver extends FediDriver {
                         }
                     }
                     const opAvatar = await fetch(opAvatarUrl);
-                    const opAvatarFilename = `tmp/${op.id}.tmp`;
+                    const opAvatarFilename = `tmp/${op.id}.webp`;
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
-                    const opAvatarPatUpload = await this.UploadMedia(new Blob([opAvatarPat]), `${this.ComposeFqn(op)} getting patted =3`);
-                    if (this.mode === 'gif') this.Post(opAvatarPatUpload.id, `${this.ComposeFqn(op)} ${this.ComposeFqn(replyOp)}`, [op.id, replyOp.id], mention.note.visibility, mention.note.id);
+                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${this._composeFqn(op)} getting patted =3`);
+                    if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(replyOp)}`, [op.id, replyOp.id], mention.note.visibility, mention.note.id);
                 } else {
                     const op = mention.note.user;
                     const opAvatarUrl = op.avatarUrl;
@@ -115,17 +134,17 @@ export class MisskeyDriver extends FediDriver {
                         }
                     }
                     const opAvatar = await fetch(opAvatarUrl);
-                    const opAvatarFilename = `tmp/${op.id}.tmp`;
+                    const opAvatarFilename = `tmp/${op.id}.webp`;
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
-                    const opAvatarPatUpload = await this.UploadMedia(new Blob([opAvatarPat]), `${this.ComposeFqn(op)} getting patted =3`);
-                    if (this.mode === 'gif') this.Post(opAvatarPatUpload.id, `${this.ComposeFqn(op)}`, [op.id], mention.note.visibility, mention.note.id);
+                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${this._composeFqn(op)} getting patted =3`);
+                    if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)}`, [op.id], mention.note.visibility, mention.note.id);
                     
                 }
             } else {
                 const op = mention.note.user;
                 const otherMentionsIds = noteMentions.filter(mentionedUser => mentionedUser !== self.id);
-                const otherMentions = await this.GetUsers(otherMentionsIds);
+                const otherMentions = await this._getUsers(otherMentionsIds);
                 otherMentions.forEach(async mentionedUser => {
                     const userAvatarUrl = mentionedUser.avatarUrl;
                     if (!userAvatarUrl) {
@@ -136,13 +155,14 @@ export class MisskeyDriver extends FediDriver {
                         }
                     }
                     const userAvatar = await fetch(userAvatarUrl);
-                    const userAvatarFilename = `tmp/${mentionedUser.id}.tmp`;
+                    const userAvatarFilename = `tmp/${mentionedUser.id}.webp`;
                     await Bun.write(userAvatarFilename, userAvatar);
                     const userAvatarPat = await pat(userAvatarFilename);
-                    const userAvatarPatUpload = await this.UploadMedia(new Blob([userAvatarPat]), `${this.ComposeFqn(mentionedUser)} getting patted =3`);
-                    if (this.mode === 'gif') this.Post(userAvatarPatUpload.id, `${this.ComposeFqn(op)} ${this.ComposeFqn(mentionedUser)}`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id);
+                    const userAvatarPatUpload = await this._uploadMedia(new Blob([userAvatarPat]), `${this._composeFqn(mentionedUser)} getting patted =3`);
+                    if (this.mode === 'gif') this._post(userAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(mentionedUser)}`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id);
                 })
             }
+            this._saveLastMentionIdToFile(mention.id);
         });
     }
 }
