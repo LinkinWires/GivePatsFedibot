@@ -6,11 +6,11 @@ export abstract class FediDriver {
         this.idFilename = idFilename;
     }
     abstract Tick(): Promise<void>;
-    abstract GetMentions(sinceId?: string, untilId?: string): Promise<object[]>;
-    abstract SaveLastMentionIdToFile(id: string): Promise<void>;
-    abstract UploadMedia(file: Blob, alt?: string): Promise<object>
-    abstract Post(mediaId: string, text: string, mentions: string[], visibility: string, replyId: string): Promise<object>;
-    public async LoadLastMentionIdFromFile(): Promise<string | undefined> {
+    protected abstract _getMentions(sinceId?: string, untilId?: string): Promise<object[]>;
+    protected abstract _saveLastMentionIdToFile(id: string): Promise<void>;
+    protected abstract _uploadMedia(file: Blob, alt?: string): Promise<object>
+    protected abstract _post(mediaId: string, text: string, mentions: string[], visibility: string, replyId: string): Promise<object>;
+    protected async _loadLastMentionIdFromFile(): Promise<string | undefined> {
         const file = Bun.file(this.idFilename);
         if (await file.exists()) {
             const id = await file.text();
