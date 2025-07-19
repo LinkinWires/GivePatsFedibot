@@ -13,8 +13,8 @@ import { pat } from './shared';
 export class MisskeyDriver extends FediDriver {
     private _api: APIClient;
     public mode: 'gif' | 'emoji';
-    public constructor(instanceUrl: string, accessToken: string, mode: 'gif' | 'emoji' = 'gif', debug = false, idFilename = '.last-id') {
-        super(debug, idFilename);
+    public constructor(instanceUrl: string, accessToken: string, mode: 'gif' | 'emoji' = 'gif', idFilename = '.last-id') {
+        super(idFilename);
         this.mode = mode;
         this._api = new misskeyApi.APIClient({
             origin: instanceUrl,
@@ -22,20 +22,22 @@ export class MisskeyDriver extends FediDriver {
         });
         this._saveLastMentionIdToFile();
     }
+    // custom methods
     private _composeFqn(user: User): string {
         return `@${user.username}${user.host ? `@${user.host}` : ''}`;
-    }
-    private async _getMe(): Promise<User> {
-        return await this._api.request('i', {});
     }
     private async _getUsers(ids: string[]): Promise<User[]> {
         return await this._api.request('users/show', {userIds: ids});
     }
+    // abstract implementations
+    protected async _getMe(): Promise<User> {
+        return await this._api.request('i', {});
+    }
     protected async _getMentions(sinceId?: string, untilId?: string, markAsRead: boolean = true): Promise<Notification[]> {
         return await this._api.request('i/notifications', {sinceId: sinceId, untilId: untilId, markAsRead: markAsRead, includeTypes: ['mention']});
     }
-    protected async _uploadMedia(file: Blob, alt?: string): Promise<DriveFile> {
-        return await this._api.request('drive/files/create', {file: file, comment: alt});
+    protected async _uploadMedia(file: Blob, filename: string, alt?: string): Promise<DriveFile> {
+        return await this._api.request('drive/files/create', {file: file, name: filename, comment: alt});
     }
     protected async _post(mediaId: string, text: string, mentions: string[], visibility: 'public' | 'home' | 'followers' | 'specified', replyId: string): Promise<NotesCreateResponse> {
         const postRequest = {
@@ -48,17 +50,10 @@ export class MisskeyDriver extends FediDriver {
         return await this._api.request('notes/create', postRequest);
     }
     protected async _saveLastMentionIdToFile(id?: string): Promise<void> {
-        if (id) {
-            await Bun.write(this.idFilename, id);
-        } else {
+        if (id) await Bun.write(this.idFilename, id);
+        else {
             const lastMention = (await this._getMentions())[0];
-            if (!lastMention) {
-                if (this.debug) throw Error('GetMentions() returned empty array.');
-                else {
-                    console.error('GetMentions() returned empty array.');
-                    return;
-                }
-            }
+            if (!lastMention) throw Error('GetMentions() returned empty array.');
             await Bun.write(this.idFilename, lastMention.id);
         }
     }
@@ -70,95 +65,55 @@ export class MisskeyDriver extends FediDriver {
             console.log(`new mentions: ${unreadMentions.map(mention => mention.id)}`);
         }
         unreadMentions.forEach(async mention => {
-            if (mention.type !== 'mention') {
-                if (this.debug) throw Error('Notification type is not a mention');
-                else {
-                    console.error('Notification type is not a mention');
-                    return;
-                }
-            }
-
-            if (mention.userId === self.id) {
-                if (this.debug) throw Error('Post was created by the bot itself');
-                else {
-                    console.error('Post was created by the bot itself');
-                    return;
-                }
-            }
-
-            if (mention.note.reply && mention.note.reply.userId === self.id) {
-                if (this.debug) throw Error("This post is a reply to the bot's post");
-                else {
-                    console.error("This post is a reply to the bot's post");
-                    return;
-                }
-            }
+            if (mention.type !== 'mention') throw Error('Notification type is not a mention');
+            if (mention.userId === self.id) throw Error('Note was created by the bot itself');
+            if (mention.note.reply && mention.note.reply.userId === self.id) throw Error("This note is a reply to the bot's note");
 
             const noteMentions = mention.note.mentions;
-            if (!noteMentions) {
-                if (this.debug) throw Error('Note has no mentions');
-                else {
-                    console.error('Note has no mentions');
-                    return;
-                }
-            }
+            if (!noteMentions || noteMentions.length < 1) throw Error('Note has no mentions');
 
+            // if the only mentioned account in the post is the bot
             if (noteMentions.length === 1 && noteMentions[0] === self.id) {
-                // If mention is a reply to other note
+                // creating pat pat gif of the person in the reply
                 if (mention.note.replyId) {
-                    const replyOp = mention.note.user;
+                    const replyOp = mention.user;
                     const originalNote = mention.note.reply!;
                     const op = originalNote.user;
                     const opAvatarUrl = op.avatarUrl;
-                    if (!opAvatarUrl) {
-                        if (this.debug) throw Error('This user has no profile picture');
-                        else {
-                            console.error('This user has no profile picture');
-                            return;
-                        }
-                    }
+                    if (!opAvatarUrl) throw Error('This user has no profile picture');
                     const opAvatar = await fetch(opAvatarUrl);
                     const opAvatarFilename = `tmp/${op.id}.webp`;
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
-                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${this._composeFqn(op)} getting patted =3`);
+                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]),`${op.id}.gif`,  `${this._composeFqn(op)} getting patted =3`);
                     if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(replyOp)}`, [op.id, replyOp.id], mention.note.visibility, mention.note.id);
+                // creating pat pat gif of the person who tagged this bot
+                // before you blame them for being too prideful, maybe they just have a bad day =(
                 } else {
                     const op = mention.note.user;
                     const opAvatarUrl = op.avatarUrl;
-                    if (!opAvatarUrl) {
-                        if (this.debug) throw Error('This user has no profile picture');
-                        else {
-                            console.error('This user has no profile picture');
-                            return;
-                        }
-                    }
+                    if (!opAvatarUrl) throw Error('This user has no profile picture');
                     const opAvatar = await fetch(opAvatarUrl);
                     const opAvatarFilename = `tmp/${op.id}.webp`;
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
-                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${this._composeFqn(op)} getting patted =3`);
+                    const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${op.id}.gif`, `${this._composeFqn(op)} getting patted =3`);
                     if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)}`, [op.id], mention.note.visibility, mention.note.id);
                     
                 }
+            // creating pat pat gif of everyone mentioned except the bot
             } else {
                 const op = mention.note.user;
                 const otherMentionsIds = noteMentions.filter(mentionedUser => mentionedUser !== self.id);
                 const otherMentions = await this._getUsers(otherMentionsIds);
                 otherMentions.forEach(async mentionedUser => {
                     const userAvatarUrl = mentionedUser.avatarUrl;
-                    if (!userAvatarUrl) {
-                        if (this.debug) throw Error('This user has no profile picture');
-                        else {
-                            console.error('This user has no profile picture');
-                            return;
-                        }
-                    }
+                    if (!userAvatarUrl) throw Error('This user has no profile picture');
                     const userAvatar = await fetch(userAvatarUrl);
                     const userAvatarFilename = `tmp/${mentionedUser.id}.webp`;
                     await Bun.write(userAvatarFilename, userAvatar);
                     const userAvatarPat = await pat(userAvatarFilename);
-                    const userAvatarPatUpload = await this._uploadMedia(new Blob([userAvatarPat]), `${this._composeFqn(mentionedUser)} getting patted =3`);
+                    const userAvatarPatUpload = await this._uploadMedia(new Blob([userAvatarPat]), `${mentionedUser.id}.gif`, `${this._composeFqn(mentionedUser)} getting patted =3`);
                     if (this.mode === 'gif') this._post(userAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(mentionedUser)}`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id);
                 })
             }
