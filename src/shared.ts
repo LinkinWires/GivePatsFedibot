@@ -20,6 +20,9 @@ export async function pat(filename: string): Promise<Buffer> {
         const newFilename = `${filename.replace(format, 'png')}`;
         await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
         finalFilename = newFilename;
+        await Bun.file(filename).delete();
     } else finalFilename = filename;
-    return await petPetGif(finalFilename);
+    const gif = await petPetGif(finalFilename);
+    if (finalFilename !== filename) await Bun.file(finalFilename).delete();
+    return gif;
 }
