@@ -15,10 +15,11 @@ Inspired by
 
 ## How to use
 
-1. Install [Bun](https://bun.sh/)
+1. Install [Bun](https://bun.sh/), ffmpeg (for converting weird formats to `.png`) and Node.js (weird, I know, but without it one of the modules fails to install)
 2. [Download the latest release](https://codeberg.org/linkinwires/GivePatsFedibot/releases) for the stable version or clone the repo for the latest version
 3. `cd` into the cloned repo
-4. Define env vars `INSTANCE_URL`, `ACCESS_TOKEN`, `SOFTWARE` and `BOT_USERNAME` if you are using Mastodon
+4. Run `bun i`
+5. Define env vars `INSTANCE_URL`, `ACCESS_TOKEN`, `SOFTWARE` and `BOT_USERNAME` if you are using Mastodon
     
     `INSTANCE_URL` holds URL of the instance the bot will operate on *with* `http(s)://` in the beginning and *without* the trailing slash.
 
@@ -43,7 +44,7 @@ Inspired by
     SOFTWARE=mastodon
     BOT_USERNAME=givepats
     ```
-5. Run `bun run src/index.ts`
+6. Run `bun run src/index.ts`
 
 ### Beyond basics
 If you want to run the bot as a systemd daemon, consult [the official Bun guide](https://bun.sh/guides/ecosystem/systemd)
