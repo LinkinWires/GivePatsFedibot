@@ -55,11 +55,11 @@ export class MastodonDriver extends FediDriver {
         })
     }
     // fun fact: this working bad with sharkey if visibility is private btw was the inspiration for various drivers
-    protected async _post(mediaId: string, text: string, mentions: string[], visibility: 'direct' | 'public' | 'private' | 'unlisted', replyId: string): Promise<object> {
+    protected async _post(text: string, mentions: string[], visibility: 'direct' | 'public' | 'private' | 'unlisted', replyId: string, mediaId?: string): Promise<object> {
         return await this._api.v1.statuses.create({
             status: `${mentions.reduce((pv, cv) => pv += `@${cv} `, '').trim()} ${text}`,
             visibility: visibility,
-            mediaIds: [mediaId],
+            mediaIds: mediaId ? [mediaId] : undefined,
             inReplyToId: replyId,
         })
     }
@@ -90,7 +90,7 @@ export class MastodonDriver extends FediDriver {
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
                     const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `@${op.acct} getting patted =3`);
-                    this._post(opAvatarPatUpload.id, '', [replyOp.acct, op.acct], mention.status.visibility, mention.status.id);
+                    this._post('', [replyOp.acct, op.acct], mention.status.visibility, mention.status.id, opAvatarPatUpload.id);
                 // creating pat pat gif of the person who tagged this bot
                 // before you blame them for being too prideful, maybe they just have a bad day =(
                 } else {
@@ -101,7 +101,7 @@ export class MastodonDriver extends FediDriver {
                     await Bun.write(opAvatarFilename, opAvatar);
                     const opAvatarPat = await pat(opAvatarFilename);
                     const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `@${op.acct} getting patted =3`);
-                    this._post(opAvatarPatUpload.id, '', [op.acct], mention.status.visibility, mention.status.id)
+                    this._post('', [op.acct], mention.status.visibility, mention.status.id, opAvatarPatUpload.id)
                 }
             // creating pat pat gif of everyone mentioned except the bot
             } else {
@@ -115,7 +115,7 @@ export class MastodonDriver extends FediDriver {
                     await Bun.write(userAvatarFilename, userAvatar);
                     const userAvatarPat = await pat(userAvatarFilename);
                     const userAvatarPatUpload = await this._uploadMedia(new Blob([userAvatarPat]), `@${mentionedUser.acct} getting patted =3`);
-                    this._post(userAvatarPatUpload.id, '', [op.acct, mentionedUser.acct], mention.status.visibility, mention.status.id);
+                    this._post('', [op.acct, mentionedUser.acct], mention.status.visibility, mention.status.id, userAvatarPatUpload.id);
                 })
             }
             this._saveLastMentionIdToFile(mention.id);
