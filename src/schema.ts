@@ -20,7 +20,7 @@ export abstract class FediDriver {
     }
     protected async _avatarToGif(avatarUrl: string, filename: string): Promise<Buffer> {
         const avatar = await fetch(avatarUrl);
-        await Bun.write(filename, avatarUrl);
+        await Bun.write(filename, avatar);
         return await pat(filename);
     }
 }
