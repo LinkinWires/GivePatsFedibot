@@ -26,8 +26,16 @@ export class MisskeyDriver extends FediDriver {
     private _composeFqn(user: User): string {
         return `@${user.username}${user.host ? `@${user.host}` : ''}`;
     }
+    private _composeEmojiName(user: User): string {
+        return `${user.username}${user.host ? `-${user.host.replaceAll('.', '-')}` : ''}-patpat`
+    }
     private async _getUsers(ids: string[]): Promise<User[]> {
         return await this._api.request('users/show', {userIds: ids});
+    }
+    private async _addCustomEmoji(mediaId: string, name: string, category: string) {
+        const emoteList = await this._api.request('admin/emoji/list', {query: name});
+        if (emoteList[0]) return await this._api.request('admin/emoji/update', {name: name, fileId: mediaId});
+        else return await this._api.request('admin/emoji/add', {name: name, fileId: mediaId, category: category});
     }
     // abstract implementations
     protected async _getMe(): Promise<User> {
@@ -39,13 +47,13 @@ export class MisskeyDriver extends FediDriver {
     protected async _uploadMedia(file: Blob, filename: string, alt?: string): Promise<DriveFile> {
         return await this._api.request('drive/files/create', {file: file, name: filename, comment: alt});
     }
-    protected async _post(mediaId: string, text: string, mentions: string[], visibility: 'public' | 'home' | 'followers' | 'specified', replyId: string): Promise<NotesCreateResponse> {
+    protected async _post(text: string, mentions: string[], visibility: 'public' | 'home' | 'followers' | 'specified', replyId: string, mediaId?: string): Promise<NotesCreateResponse> {
         const postRequest = {
             visibility: visibility,
             visibleUserIds: visibility === 'specified' ? mentions : undefined,
             replyId: replyId,
             text: text,
-            mediaIds: [mediaId],
+            mediaIds: mediaId ? [mediaId] : undefined,
         }
         return await this._api.request('notes/create', postRequest);
     }
@@ -76,30 +84,35 @@ export class MisskeyDriver extends FediDriver {
             if (noteMentions.length === 1 && noteMentions[0] === self.id) {
                 // creating pat pat gif of the person in the reply
                 if (mention.note.replyId) {
-                    const replyOp = mention.user;
+                    const replyOp = mention.user; // user who tagged the bot
                     const originalNote = mention.note.reply!;
-                    const op = originalNote.user;
+                    const op = originalNote.user; // user who the tagger responded to
                     const opAvatarUrl = op.avatarUrl;
                     if (!opAvatarUrl) throw Error('This user has no profile picture');
-                    const opAvatar = await fetch(opAvatarUrl);
                     const opAvatarFilename = `tmp/${op.id}.webp`;
-                    await Bun.write(opAvatarFilename, opAvatar);
-                    const opAvatarPat = await pat(opAvatarFilename);
+                    const opAvatarPat = await this._avatarToGif(opAvatarUrl, opAvatarFilename);
                     const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]),`${op.id}.gif`,  `${this._composeFqn(op)} getting patted =3`);
-                    if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(replyOp)}`, [op.id, replyOp.id], mention.note.visibility, mention.note.id);
+                    if (this.mode === 'gif') this._post(`${this._composeFqn(op)} ${this._composeFqn(replyOp)}`, [op.id, replyOp.id], mention.note.visibility, mention.note.id, opAvatarPatUpload.id);
+                    else {
+                        const emojiName = this._composeEmojiName(op);
+                        await this._addCustomEmoji(opAvatarPatUpload.id, emojiName, 'patpat');
+                        this._post(`${this._composeFqn(op)} ${this._composeFqn(replyOp)} :${emojiName}:`, [op.id, replyOp.id], mention.note.visibility, mention.note.id);
+                    }
                 // creating pat pat gif of the person who tagged this bot
                 // before you blame them for being too prideful, maybe they just have a bad day =(
                 } else {
                     const op = mention.note.user;
                     const opAvatarUrl = op.avatarUrl;
                     if (!opAvatarUrl) throw Error('This user has no profile picture');
-                    const opAvatar = await fetch(opAvatarUrl);
                     const opAvatarFilename = `tmp/${op.id}.webp`;
-                    await Bun.write(opAvatarFilename, opAvatar);
-                    const opAvatarPat = await pat(opAvatarFilename);
+                    const opAvatarPat = await this._avatarToGif(opAvatarUrl, opAvatarFilename);
                     const opAvatarPatUpload = await this._uploadMedia(new Blob([opAvatarPat]), `${op.id}.gif`, `${this._composeFqn(op)} getting patted =3`);
-                    if (this.mode === 'gif') this._post(opAvatarPatUpload.id, `${this._composeFqn(op)}`, [op.id], mention.note.visibility, mention.note.id);
-                    
+                    if (this.mode === 'gif') this._post(`${this._composeFqn(op)}`, [op.id], mention.note.visibility, mention.note.id, opAvatarPatUpload.id);
+                    else {
+                        const emojiName = this._composeEmojiName(op);
+                        await this._addCustomEmoji(opAvatarPatUpload.id, emojiName, 'patpat');
+                        this._post(`${this._composeFqn(op)} :${emojiName}:`, [op.id], mention.note.visibility, mention.note.id);
+                    }
                 }
             // creating pat pat gif of everyone mentioned except the bot
             } else {
@@ -109,12 +122,15 @@ export class MisskeyDriver extends FediDriver {
                 otherMentions.forEach(async mentionedUser => {
                     const userAvatarUrl = mentionedUser.avatarUrl;
                     if (!userAvatarUrl) throw Error('This user has no profile picture');
-                    const userAvatar = await fetch(userAvatarUrl);
                     const userAvatarFilename = `tmp/${mentionedUser.id}.webp`;
-                    await Bun.write(userAvatarFilename, userAvatar);
-                    const userAvatarPat = await pat(userAvatarFilename);
+                    const userAvatarPat = await this._avatarToGif(userAvatarUrl, userAvatarFilename);
                     const userAvatarPatUpload = await this._uploadMedia(new Blob([userAvatarPat]), `${mentionedUser.id}.gif`, `${this._composeFqn(mentionedUser)} getting patted =3`);
-                    if (this.mode === 'gif') this._post(userAvatarPatUpload.id, `${this._composeFqn(op)} ${this._composeFqn(mentionedUser)}`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id);
+                    if (this.mode === 'gif') this._post(`${this._composeFqn(op)} ${this._composeFqn(mentionedUser)}`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id, userAvatarPatUpload.id);
+                    else {
+                        const emojiName = this._composeEmojiName(mentionedUser);
+                        await this._addCustomEmoji(userAvatarPatUpload.id, emojiName, 'patpat');
+                        this._post(`${this._composeFqn(op)} ${this._composeFqn(mentionedUser)} :${emojiName}:`, [op.id, mentionedUser.id], mention.note.visibility, mention.note.id);
+                    }
                 })
             }
             this._saveLastMentionIdToFile(mention.id);
