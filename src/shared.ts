@@ -22,7 +22,7 @@ export async function pat(filename: string): Promise<Buffer> {
         finalFilename = newFilename;
         await Bun.file(filename).delete();
     } else finalFilename = filename;
-    const gif = await petPetGif(finalFilename, { resolution: 256, delay: 20, backgroundColor: null });
+    const gif = await petPetGif(finalFilename, { resolution: 512, delay: 20, backgroundColor: null });
     if (finalFilename !== filename) await Bun.file(finalFilename).delete();
     return gif;
 }
