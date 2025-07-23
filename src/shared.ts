@@ -1,5 +1,6 @@
 import petPetGif from "@someaspy/pet-pet-gif";
 import { $ } from "bun";
+import { getAverageColor } from "fast-average-color-node";
 
 export function getMime(file: string | Buffer): string {
     if (typeof file === 'string') {
@@ -13,6 +14,7 @@ export function getMime(file: string | Buffer): string {
 }
 
 export async function pat(filename: string): Promise<Buffer> {
+    const averageColor = await getAverageColor(filename);
     const mime = getMime(filename);
     const format = mime.replace('image/', '');
     let finalFilename = '';
@@ -22,7 +24,7 @@ export async function pat(filename: string): Promise<Buffer> {
         finalFilename = newFilename;
         await Bun.file(filename).delete();
     } else finalFilename = filename;
-    const gif = await petPetGif(finalFilename, { resolution: 512, delay: 20, backgroundColor: null });
+    const gif = await petPetGif(finalFilename, { resolution: 512, delay: 20, backgroundColor: averageColor.hex });
     if (finalFilename !== filename) await Bun.file(finalFilename).delete();
     return gif;
 }
