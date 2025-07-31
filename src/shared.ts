@@ -1,5 +1,5 @@
 import petPetGif from "@someaspy/pet-pet-gif";
-import { $ } from "bun";
+import { $, file } from "bun";
 import { getAverageColor } from "fast-average-color-node";
 
 export function getMime(file: string | Buffer): string {
@@ -20,7 +20,15 @@ export async function pat(filename: string): Promise<Buffer> {
     let finalFilename = '';
     if (mime !== 'image/png') {
         const newFilename = `${filename.replace(format, 'png')}`;
-        await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
+        if (mime === 'image/webp') {
+            const oneFrameFilename = filename.replace('.webp', '_1.webp');
+            const res = await $`webpmux -get frame 1 ${filename} -o ${oneFrameFilename}`.nothrow();
+            if (res.exitCode === 0) await $`ffmpeg -loglevel error -hide_banner -y -i ${oneFrameFilename} ${newFilename}`;
+            else await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
+            await Bun.file(oneFrameFilename).delete();
+        } else {
+            await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
+        }
         finalFilename = newFilename;
         await Bun.file(filename).delete();
     } else finalFilename = filename;
