@@ -15,7 +15,7 @@ Inspired by
 
 ## How to use
 
-1. Install [Bun](https://bun.sh/), ffmpeg (for converting weird formats to `.png`) and Node.js (weird, I know, but without it one of the modules fails to install)
+1. Install [Bun](https://bun.sh/), `ffmpeg` (for converting weird formats to `.png`), `webp` (for extracting frames from animated `.webp`s) and Node.js (weird, I know, but without it one of the modules fails to install)
 2. [Download the latest release](https://codeberg.org/linkinwires/GivePatsFedibot/releases) for the stable version or clone the repo for the latest version
 3. `cd` into the cloned repo
 4. Run `bun i`
