@@ -23,9 +23,11 @@ export async function pat(filename: string): Promise<Buffer> {
         if (mime === 'image/webp') {
             const oneFrameFilename = filename.replace('.webp', '_1.webp');
             const res = await $`webpmux -get frame 1 ${filename} -o ${oneFrameFilename}`.nothrow();
-            if (res.exitCode === 0) await $`ffmpeg -loglevel error -hide_banner -y -i ${oneFrameFilename} ${newFilename}`;
+            if (res.exitCode === 0) {
+                await $`ffmpeg -loglevel error -hide_banner -y -i ${oneFrameFilename} ${newFilename}`;
+                await Bun.file(oneFrameFilename).delete();
+            }
             else await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
-            await Bun.file(oneFrameFilename).delete();
         } else {
             await $`ffmpeg -loglevel error -hide_banner -y -i ${filename} ${newFilename}`;
         }
